@@ -4,6 +4,7 @@ import xgboost as xgb
 import time
 import re
 import matplotlib.pyplot as plt
+import tempfile
 
 st.set_page_config(page_title="DNS Watchdog", layout="wide")
 st.title("🛡️ DNS Watchdog")
@@ -23,8 +24,11 @@ delay = st.sidebar.slider("Log Display Delay (seconds)", 0.1, 2.0, 0.5)
 
 # Load model
 def load_model(json_file):
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as tmp:
+        tmp.write(json_file.read())
+        tmp_path = tmp.name
     model = xgb.Booster()
-    model.load_model(json_file)
+    model.load_model(tmp_path)
     return model
 
 if json_model_file is not None:
