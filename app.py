@@ -1,40 +1,38 @@
 import streamlit as st
 import pandas as pd
-import xgboost as xgb
 import time
 import re
 import matplotlib.pyplot as plt
+import joblib
 import tempfile
 
 st.set_page_config(page_title="DNS Watchdog", layout="wide")
 st.title("🛡️ DNS Watchdog")
-st.markdown("Real-time DNS filtering and threat detection using XGBoost `.json` model.")
+st.markdown("Real-time DNS filtering and threat detection using an XGBoost model (joblib format)")
 
-# Upload model file (XGBoost JSON format)
-json_model_file = st.sidebar.file_uploader("📦 Upload XGBoost Model (.json)", type=["json"])
-
-# Upload DNS log CSV
-uploaded_file = st.file_uploader("📂 Upload DNS Logs (CSV)", type="csv")
-
-# Settings
+# Sidebar controls
 st.sidebar.header("⚙️ Settings")
 threshold = st.sidebar.slider("Confidence Threshold", 0.6, 0.99, 0.8)
 simulate_stream = st.sidebar.checkbox("Simulate Real-Time Stream", True)
 delay = st.sidebar.slider("Log Display Delay (seconds)", 0.1, 2.0, 0.5)
 
-# Load model
-def load_model(json_file):
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as tmp:
-        tmp.write(json_file.read())
+# Upload joblib-saved model
+uploaded_model = st.sidebar.file_uploader("📦 Upload XGBoost Model (.pkl/.json)", type=["pkl", "json"])
+
+# Upload DNS logs
+uploaded_file = st.file_uploader("📂 Upload DNS Logs (CSV with `domain` column)", type="csv")
+
+# Load model from file-like object
+def load_model(uploaded_file):
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".model") as tmp:
+        tmp.write(uploaded_file.read())
         tmp_path = tmp.name
-    model = xgb.Booster()
-    model.load_model(tmp_path)
+    model = joblib.load(tmp_path)
     return model
 
-if json_model_file is not None:
-    model = load_model(json_model_file)
+if uploaded_model is not None:
+    model = load_model(uploaded_model)
 
-    # Feature extraction
     def extract_features(domain):
         return [
             len(domain),
@@ -47,8 +45,8 @@ if json_model_file is not None:
     def predict_dns(row):
         domain = row['domain']
         features = extract_features(domain)
-        dmatrix = xgb.DMatrix([features])
-        confidence = model.predict(dmatrix)[0]
+        prediction = model.predict([features])[0]
+        confidence = max(model.predict_proba([features])[0])
         verdict = "Malicious" if confidence > 0.8 else "Suspicious" if confidence > 0.5 else "Safe"
         return verdict, round(confidence, 2)
 
@@ -86,11 +84,14 @@ if json_model_file is not None:
 
             result_df = pd.DataFrame(results)
             st.markdown("### 📊 Verdict Breakdown")
-            st.bar_chart(result_df['Verdict'].value_counts())
+            fig1, ax1 = plt.subplots()
+            ax1.pie(result_df['Verdict'].value_counts(), labels=result_df['Verdict'].unique(), autopct='%1.1f%%', startangle=90)
+            ax1.axis('equal')
+            st.pyplot(fig1)
 
             csv = result_df.to_csv(index=False).encode("utf-8")
             st.download_button("⬇️ Download Results", csv, "dns_results.csv")
     else:
         st.info("Upload a DNS log file to begin.")
 else:
-    st.warning("Please upload a valid `.json` XGBoost model in the sidebar.")
+    st.warning("Please upload your joblib-saved XGBoost model.")
