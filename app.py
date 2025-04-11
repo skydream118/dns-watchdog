@@ -5,6 +5,7 @@ import re
 import matplotlib.pyplot as plt
 import joblib
 import tempfile
+import numpy as np
 
 st.set_page_config(page_title="DNS Watchdog", layout="wide")
 st.title("🛡️ DNS Watchdog")
@@ -42,11 +43,11 @@ if uploaded_model is not None:
             domain.count('.') + 1
         ]
 
-    def predict_dns(row):
-        domain = row['domain']
+    def predict_dns(domain):
         features = extract_features(domain)
-        prediction = model.predict([features])[0]
-        confidence = max(model.predict_proba([features])[0])
+        features_array = np.array(features).reshape(1, -1)  # Ensure it's 2D
+        prediction = model.predict(features_array)[0]
+        confidence = max(model.predict_proba(features_array)[0])
         verdict = "Malicious" if confidence > 0.8 else "Suspicious" if confidence > 0.5 else "Safe"
         return verdict, round(confidence, 2)
 
@@ -63,7 +64,7 @@ if uploaded_model is not None:
                 if simulate_stream:
                     time.sleep(delay)
 
-                verdict, confidence = predict_dns(row)
+                verdict, confidence = predict_dns(row['domain'])
                 placeholder = st.empty()
 
                 if confidence >= threshold:
