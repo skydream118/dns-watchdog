@@ -38,7 +38,6 @@ def extract_features(domain):
         sum(c.isdigit() for c in domain),           # digit count
         len(re.findall(r'[^a-zA-Z0-9]', domain)),   # special characters
         int('-' in domain),                         # has hyphen
-        domain.count('.') + 1                       # number of parts
     ]
 
 # -------------------- Prediction Function -------------------- #
